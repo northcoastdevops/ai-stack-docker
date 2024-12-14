@@ -1,0 +1,209 @@
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    environment:
+      - ENV=production
+      - WEBUI_AUTH=true
+      - WEBUI_NAME=PoopFarts
+      - WEBUI_URL=https://ai.internal 
+      - WEBUI_SECRET_KEY=2721c861-a3bb-4878-97ac-d4178b7eeb32
+      - ENABLE_SIGNUP=true
+      - ENABLE_LOGIN_FORM=true
+      - DEFAULT_USER_ROLE=user
+      - HOST=0.0.0.0
+      - PORT=8080
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - LOG_LEVEL=info
+      - AIOHTTP_CLIENT_TIMEOUT=60
+      - USER_PERMISSIONS_CHAT_DELETION=true
+      - USER_PERMISSIONS_CHAT_EDITING=true
+      - USER_PERMISSIONS_CHAT_TEMPORARY=true
+      - ENABLE_OPENAI=false
+      - WORKERS=8
+      - MAX_MEMORY=8G
+      - ENABLE_RAG_WEB_SEARCH=true
+      - RAG_WEB_SEARCH_ENGINE=searxng
+      - RAG_WEB_SEARCH_RESULT_COUNT=3
+      - RAG_WEB_SEARCH_CONCURRENT_REQUESTS=10
+      - SEARXNG_QUERY_URL=http://searxng:8080/search?format=json&q=<query>
+      - UVICORN_ACCESS_LOG=1
+      - CORS_ALLOW_ORIGIN=https://ai.internal
+      - USER_AGENT=open-webui/0.4.7
+      - WEBUI_ALLOW_ORIGINS=https://ai.internal
+      - WEBUI_CORS_ORIGINS=https://ai.internal
+      - WEBUI_ALLOW_CREDENTIALS=true
+      - WEBUI_ALLOW_METHODS=GET,POST,PUT,DELETE,OPTIONS
+      - WEBUI_ALLOW_HEADERS=*,Authorization,Accept,Origin,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Content-Range,Range,Upgrade,Connection
+      - SOCKETIO_CORS_ALLOWED_ORIGINS=https://ai.internal
+      - SOCKETIO_PATH=/ws/socket.io
+      - SOCKETIO_ASYNC_MODE=true
+      - SOCKETIO_PING_TIMEOUT=60000
+      - SOCKETIO_PING_INTERVAL=25000
+      - SOCKETIO_MAX_HTTP_BUFFER_SIZE=1000000
+      - SOCKETIO_TRANSPORTS=polling,websocket
+      - SOCKETIO_ALWAYS_CONNECT=true
+      - SOCKETIO_CORS_CREDENTIALS=true
+      - SOCKETIO_UPGRADE_TIMEOUT=20000
+      - SOCKETIO_WEBSOCKET_PING_INTERVAL=10000
+      - SOCKETIO_WEBSOCKET_PING_TIMEOUT=5000
+      - SOCKETIO_COOKIE_SECURE=false
+    # ports:
+    #   - "8081:8080"
+    networks:
+      - bridge
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1"
+    volumes:
+      - open-webui-data:/app/backend/data
+    entrypoint: ["/bin/sh", "-c"]
+    command: 
+      - |
+        uvicorn open_webui.main:app --host 0.0.0.0 --port 8080 --workers 8
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+        reservations:
+          memory: 8G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  searxng:
+    image: searxng/searxng:latest
+    container_name: searxng
+    environment:
+      - SEARXNG_BASE_URL=https://search.internal
+      - SEARXNG_SECRET_KEY=2721c861-a3bb-4878-97ac-d4178b7eeb32
+      - SEARXNG_TIMEOUT=15.0
+      - SEARXNG_CACHE_TIMEOUT=3600
+      - SEARXNG_REDIS_URL=redis://redis:6379/0
+      - SEARXNG_WORKER_COUNT=4
+      - SEARXNG_NETWORK_TIMEOUT=10.0
+      - SEARXNG_REQUEST_TIMEOUT=10.0
+      - SEARXNG_OUTGOING_REQUEST_TIMEOUT=10.0
+      - SEARXNG_ENGINES_DISABLE=soundcloud,spotify,youtube,vimeo,dailymotion
+      - SEARXNG_USE_DEFAULT_SETTINGS=true
+      - SEARXNG_SEARCH_TYPE=text
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    # ports:
+    #   - "8082:8080"
+    networks:
+      - bridge
+    volumes:
+      - ./searxng:/etc/searxng:ro
+      - searxng-db:/var/lib/searxng/db:rw
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis:
+    image: redis:alpine
+    container_name: searxng-redis
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redis-data:/data
+    networks:
+      - bridge
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
+    restart: always
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - bridge
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+          cpus: '8'
+        reservations:
+          memory: 8G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+      - certbot-www:/var/www/certbot:ro
+      - certbot-conf:/etc/letsencrypt:ro
+    networks:
+      - bridge
+    depends_on:
+      - open-webui
+      - searxng
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: certbot
+    volumes:
+      - certbot-www:/var/www/certbot:rw
+      - certbot-conf:/etc/letsencrypt:rw
+    depends_on:
+      - nginx
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+networks:
+  bridge:
+    driver: bridge
+
+volumes:
+  open-webui-data:
+    driver: local
+  redis-data:
+    driver: local
+  ollama-data:
+    driver: local
+  nginx-logs:
+    driver: local
+  certbot-www:
+    driver: local
+  certbot-conf:
+    driver: local
+  searxng-db:
+    driver: local

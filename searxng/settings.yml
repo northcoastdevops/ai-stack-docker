@@ -1,0 +1,66 @@
+general:
+    debug: false
+    instance_name: "SearXNG"
+    privacypolicy_url: false
+    donation_url: false
+    contact_url: false
+    enable_metrics: false
+
+search:
+    safe_search: 0
+    autocomplete: "google"
+    default_lang: "en"
+    ban_time_on_fail: 5
+    max_ban_time_on_fail: 120
+
+server:
+    secret_key: "2721c861-a3bb-4878-97ac-d4178b7eeb32"  # Same as in docker-compose
+    bind_address: "0.0.0.0"
+    port: 8080
+    base_url: "https://search.internal"
+    image_proxy: false
+    http_protocol_version: "1.1"
+    method: "GET"
+    default_http_headers:
+        X-Content-Type-Options: nosniff
+        X-XSS-Protection: 1; mode=block
+        X-Download-Options: noopen
+        X-Robots-Tag: noindex, nofollow
+        Referrer-Policy: no-referrer
+
+redis:
+    url: redis://redis:6379/0
+
+outgoing:
+    request_timeout: 10.0
+    max_request_timeout: 15.0
+    pool_connections: 100
+    pool_maxsize: 100
+    enable_http2: true
+    verify: true
+    max_redirects: 5
+    retries: 1
+    proxies:
+        http: null
+        https: null
+
+engines:
+    - name: google
+      engine: google
+      shortcut: g
+      disabled: false
+
+    - name: duckduckgo
+      engine: duckduckgo
+      shortcut: ddg
+      disabled: false
+
+    - name: bing
+      engine: bing
+      shortcut: b
+      disabled: false
+
+    - name: wikipedia
+      engine: wikipedia
+      shortcut: w
+      disabled: false 
